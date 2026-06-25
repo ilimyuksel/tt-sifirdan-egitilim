@@ -1,0 +1,8 @@
+
+* VERI [x]
+* MODELI YARATMAK (PARAMETRELER) [x]
+* TRAIN/TEST SPLIT [x]
+* TORCH DATALOADER/DATASET [x]
+* LOSS_FN [x]
+* OPTIMIZER [x]
+* Train/eval loop
