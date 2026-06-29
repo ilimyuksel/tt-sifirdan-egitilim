@@ -76,6 +76,7 @@ class MySentimentModel(nn.Module):
         self.layers = nn.Sequential(
             nn.Linear(input_dim, 128),
             nn.ReLU(),
+            nn.Dropout(0.3),
             nn.Linear(128, 1)
         )
 
@@ -87,10 +88,17 @@ model = MySentimentModel(input_dim=X.shape[1]).to(DEVICE)
 loss_fn = nn.BCEWithLogitsLoss()
 optim = Adam(model.parameters(), lr=0.001)
 
-### Train/Eval loop
+### Train/Eval loop with early stopping
 
 EPOCHS = 20
+PATIENCE = 3
+
+best_val_loss = float("inf")
+best_state = None
+epochs_without_improvement = 0
+
 for e in range(EPOCHS):
+    model.train()
     train_loss = 0
     for X_batch, y_batch in train_dl:
         X_batch, y_batch = X_batch.to(DEVICE), y_batch.to(DEVICE)
@@ -99,11 +107,12 @@ for e in range(EPOCHS):
         y_pred = model(X_batch)
         loss = loss_fn(y_pred, y_batch)
 
-        train_loss += float(loss)
+        train_loss += loss.item()
 
         loss.backward()
         optim.step()
 
+    model.eval()
     val_loss = 0
     all_preds, all_gt = [], []
     for X_batch, y_batch in val_dl:
@@ -112,7 +121,7 @@ for e in range(EPOCHS):
             y_pred = model(X_batch)
             loss = loss_fn(y_pred, y_batch)
 
-            val_loss += float(loss)
+            val_loss += loss.item()
 
             all_preds.extend((torch.sigmoid(y_pred) > 0.5).int().cpu().tolist())
             all_gt.extend(y_batch.int().cpu().tolist())
@@ -122,3 +131,15 @@ for e in range(EPOCHS):
     val_acc = accuracy_score(all_gt, all_preds)
 
     print(f"EPOCH {e} || TRAIN LOSS {train_loss:.5f} || VAL LOSS {val_loss:.5f} || VAL ACC {val_acc:.3f}")
+
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss
+        best_state = {k: v.clone() for k, v in model.state_dict().items()}
+        epochs_without_improvement = 0
+    else:
+        epochs_without_improvement += 1
+        if epochs_without_improvement >= PATIENCE:
+            print(f"Early stopping at epoch {e} (best val loss {best_val_loss:.5f})")
+            break
+
+model.load_state_dict(best_state)
